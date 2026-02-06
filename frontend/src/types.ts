@@ -1,0 +1,32 @@
+export interface Account {
+  id: string;
+  username: string;
+  avatar: string | null;
+  token?: string;
+}
+
+export interface Guild {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
+export interface Channel {
+  id: string;
+  name: string;
+  parentId: string | null;
+  position: number;
+}
+
+export interface Message {
+  id: string;
+  content: string;
+  author: {
+    id: string;
+    username: string;
+    avatar: string | null;
+  };
+  timestamp: number;
+  embeds?: any[];
+  attachments?: any[]; // using any for MVP iteration speed, but typically Map<string, Attachment> or array
+}
