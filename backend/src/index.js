@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const db = require('./db');
 const DiscordService = require('./services/discordService');
 const discordRoutes = require('./routes/discord');
@@ -21,6 +22,9 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from the React frontend app
+app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
 const discordService = new DiscordService(io);
 
 app.use('/api/discord', discordRoutes(discordService));
@@ -32,6 +36,12 @@ app.get('/health', (req, res) => {
 app.get('/api/accounts', (req, res) => {
   const accounts = db.prepare('SELECT id, username, avatar FROM accounts').all();
   res.json(accounts);
+});
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
 });
 
 io.on('connection', (socket) => {
