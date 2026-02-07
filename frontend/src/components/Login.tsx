@@ -23,7 +23,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const fetchSavedAccounts = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/accounts');
+      const res = await axios.get('/api/accounts');
       setSavedAccounts(res.data);
     } catch (err) {
       console.error('Failed to fetch accounts', err);
@@ -34,7 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.post('http://localhost:3001/api/discord/login', credentials);
+      const response = await axios.post('/api/discord/login', credentials);
       onLogin(response.data.token, response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to login');

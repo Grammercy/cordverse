@@ -7,7 +7,11 @@ import ChatArea from './components/ChatArea';
 import Login from './components/Login';
 import type { Account, Guild, Channel, Message } from './types';
 
-const API_BASE = 'http://localhost:3001/api/discord';
+// Use relative path for API calls. 
+// In dev (Vite), we might need a proxy or keep it absolute, but for the unified build, relative is key.
+// If window.location.hostname is localhost, we assume dev mode on 3001 if mostly local, 
+// but sticking to relative '/api/discord' works best if served by the same express app.
+const API_BASE = '/api/discord';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('cordverse_token'));
@@ -26,6 +30,7 @@ function App() {
   useEffect(() => {
     if (token) {
       // Re-login/Verify token to get user info
+      // Note: We use relative URL here too
       axios.post(`${API_BASE}/login`, { token })
         .then(res => {
           setAccount(res.data);
@@ -39,7 +44,9 @@ function App() {
           handleLogout(); 
         });
 
-      const newSocket = io('http://localhost:3001');
+      // Socket.io should connect to the host serving the page by default if no URL is passed,
+      // but let's be explicit to avoid issues if ports differ in dev.
+      const newSocket = io(); 
 
       newSocket.on('message', (msg: any) => {
         if (msg.channelId === selectedChannelIdRef.current) {
