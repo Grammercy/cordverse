@@ -42,19 +42,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
               {msg.author.avatar ? (
                 <img 
                   src={`https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png`} 
-                  alt={msg.author.username}
+                  alt={msg.author.displayName || msg.author.username}
                   className="w-full h-full"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                  {msg.author.username[0]}
+                  {(msg.author.displayName || msg.author.username)[0]}
                 </div>
               )}
             </div>
             <div className="flex-1">
               <div className="flex items-baseline space-x-2">
                 <span className="text-white font-medium hover:underline cursor-pointer">
-                  {msg.author.username}
+                  {msg.author.displayName || msg.author.username}
                 </span>
                 <span className="text-xs text-gray-400">
                   {new Date(msg.timestamp).toLocaleString()}

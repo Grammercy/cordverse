@@ -67,6 +67,7 @@ class DiscordService {
         author: {
           id: message.author.id,
           username: message.author.username,
+          displayName: message.member?.displayName ?? message.author.globalName ?? message.author.username,
           avatar: message.author.avatar,
         },
         timestamp: message.createdTimestamp,
@@ -103,7 +104,7 @@ class DiscordService {
       let avatar = null;
 
       if (channel.type === 'DM') {
-        name = channel.recipient?.username || 'Unknown User';
+        name = channel.recipient?.globalName || channel.recipient?.username || 'Unknown User';
         avatar = channel.recipient?.avatar;
       } else if (channel.type === 'GROUP_DM') {
         if (!name) {
@@ -157,6 +158,7 @@ class DiscordService {
       author: {
         id: m.author.id,
         username: m.author.username,
+        displayName: m.member?.displayName ?? m.author.globalName ?? m.author.username,
         avatar: m.author.avatar,
       },
       timestamp: m.createdTimestamp,

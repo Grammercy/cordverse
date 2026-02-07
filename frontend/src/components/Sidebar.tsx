@@ -51,21 +51,21 @@ const Sidebar: React.FC<SidebarProps> = ({ guilds, selectedGuildId, onSelectGuil
       <div className="mt-auto pt-4 border-t border-gray-800 w-full flex flex-col items-center space-y-2">
          {account && (
           <div className="group relative">
-             <div className="w-12 h-12 bg-gray-700 rounded-3xl hover:rounded-2xl transition-all duration-200 overflow-hidden cursor-pointer" title={account.username}>
+             <div className="w-12 h-12 bg-gray-700 rounded-3xl hover:rounded-2xl transition-all duration-200 overflow-hidden cursor-pointer" title={account.displayName || account.username}>
               {account.avatar ? (
                  <img 
                    src={`https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png`} 
-                   alt={account.username}
+                   alt={account.displayName || account.username}
                    className="w-full h-full"
                  />
                ) : (
                  <div className="w-full h-full flex items-center justify-center text-white font-bold">
-                   {account.username[0]}
+                   {(account.displayName || account.username)[0]}
                  </div>
                )}
              </div>
              <div className="absolute left-16 top-1/2 -translate-y-1/2 px-3 py-1 bg-black text-white text-sm rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
-                {account.username}
+                {account.displayName || account.username}
             </div>
           </div>
          )}

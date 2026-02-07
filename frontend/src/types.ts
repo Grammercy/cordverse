@@ -1,6 +1,7 @@
 export interface Account {
   id: string;
   username: string;
+  displayName?: string;
   avatar: string | null;
   token?: string;
 }
@@ -27,6 +28,7 @@ export interface Message {
   author: {
     id: string;
     username: string;
+    displayName?: string;
     avatar: string | null;
   };
   timestamp: number;

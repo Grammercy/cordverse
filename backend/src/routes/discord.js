@@ -18,6 +18,7 @@ module.exports = (discordService) => {
       res.json({
         id: client.user.id,
         username: client.user.username,
+        displayName: client.user.globalName || client.user.username,
         avatar: client.user.avatar,
         token: client.token
       });
