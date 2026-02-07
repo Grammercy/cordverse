@@ -49,7 +49,18 @@ class DiscordService {
 
       client.on('error', (error) => {
         console.error(`Error logging in: ${error.message}`);
+        this.io.emit('discordClientError', { accountId: client.user.id, message: error.message });
         reject(error);
+      });
+
+      client.on('invalidated', () => {
+        console.error(`Client token invalidated for ${client.user.tag}!`);
+        this.io.emit('discordClientInvalidated', { accountId: client.user.id, message: 'Token invalidated. Please re-login.' });
+        // Optionally, remove the client from this.clients map and clean up
+        const clientToken = Array.from(this.clients.entries()).find(([, c]) => c === client)?.[0];
+        if (clientToken) {
+          this.clients.delete(clientToken);
+        }
       });
 
       client.login(token).catch(reject);
@@ -73,6 +84,44 @@ class DiscordService {
         timestamp: message.createdTimestamp,
         embeds: message.embeds,
         attachments: [...message.attachments.values()],
+        mentions: message.mentions.users.map(u => ({
+          id: u.id,
+          username: u.username,
+          displayName: message.mentions.members?.get(u.id)?.displayName ?? u.globalName ?? u.username,
+        })),
+      });
+    });
+
+    client.on('messageUpdate', (oldMessage, newMessage) => {
+      if (!newMessage.author) return; // Partial message
+      this.io.emit('messageUpdate', {
+        accountId: client.user.id,
+        channelId: newMessage.channelId,
+        guildId: newMessage.guildId,
+        id: newMessage.id,
+        content: newMessage.content,
+        author: {
+          id: newMessage.author.id,
+          username: newMessage.author.username,
+          displayName: newMessage.member?.displayName ?? newMessage.author.globalName ?? newMessage.author.username,
+          avatar: newMessage.author.avatar,
+        },
+        timestamp: newMessage.editedTimestamp || newMessage.createdTimestamp,
+        embeds: newMessage.embeds,
+        attachments: [...newMessage.attachments.values()],
+        mentions: newMessage.mentions.users.map(u => ({
+          id: u.id,
+          username: u.username,
+          displayName: newMessage.mentions.members?.get(u.id)?.displayName ?? u.globalName ?? u.username,
+        })),
+      });
+    });
+
+    client.on('messageDelete', (message) => {
+      this.io.emit('messageDelete', {
+        accountId: client.user.id,
+        channelId: message.channelId,
+        id: message.id,
       });
     });
   }
@@ -134,24 +183,79 @@ class DiscordService {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) throw new Error('Guild not found');
 
-    return guild.channels.cache
-      .filter(c => c.type === 'GUILD_TEXT')
-      .map(channel => ({
-        id: channel.id,
-        name: channel.name,
-        parentId: channel.parentId,
-        position: channel.position,
+    const categories = guild.channels.cache
+      .filter(c => c.type === 'GUILD_CATEGORY')
+      .sort((a, b) => a.position - b.position)
+      .map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        type: 'GUILD_CATEGORY',
+        position: cat.position,
+        channels: [] // Will hold text channels
       }));
+
+    const uncategorizedChannels = [];
+    const uncategorizedVoiceChannels = [];
+
+    guild.channels.cache
+      .filter(c => c.type === 'GUILD_TEXT' || c.type === 'GUILD_VOICE')
+      .sort((a, b) => a.position - b.position)
+      .forEach(channel => {
+        const category = categories.find(cat => cat.id === channel.parentId);
+        const mappedChannel = {
+          id: channel.id,
+          name: channel.name,
+          parentId: channel.parentId,
+          type: channel.type === 'GUILD_TEXT' ? 'GUILD_TEXT' : 'GUILD_VOICE', // Differentiate type
+          position: channel.position,
+        };
+        if (category) {
+          category.channels.push(mappedChannel);
+        } else {
+          // Uncategorized text/voice channels
+          if (channel.type === 'GUILD_TEXT') {
+            uncategorizedChannels.push(mappedChannel);
+          } else {
+            uncategorizedVoiceChannels.push(mappedChannel);
+          }
+        }
+      });
+    
+    // Combine uncategorized channels and categories
+    // Uncategorized channels appear before categories, or at the top for Discord client standard
+    const flatChannels = [
+      ...uncategorizedChannels, 
+      ...uncategorizedVoiceChannels, // Add uncategorized voice channels here
+      ...categories.flatMap(cat => {
+        // Sort channels within category by type (text first, then voice) and then by position
+        cat.channels.sort((a, b) => {
+          if (a.type === 'GUILD_TEXT' && b.type === 'GUILD_VOICE') return -1;
+          if (a.type === 'GUILD_VOICE' && b.type === 'GUILD_TEXT') return 1;
+          return a.position - b.position;
+        });
+        return [
+          { ...cat, channels: undefined }, // Represent category as a channel-like object
+          ...cat.channels
+        ];
+      })
+    ];
+
+    return flatChannels;
   }
 
-  async getMessages(token, channelId, limit = 50) {
+  async getMessages(token, channelId, limit = 50, before = null) {
     const client = this.clients.get(token);
     if (!client) throw new Error('Client not logged in');
 
     const channel = client.channels.cache.get(channelId);
     if (!channel) throw new Error('Channel not found');
 
-    const messages = await channel.messages.fetch({ limit });
+    const fetchOptions = { limit };
+    if (before) {
+      fetchOptions.before = before;
+    }
+
+    const messages = await channel.messages.fetch(fetchOptions);
     return messages.map(m => ({
       id: m.id,
       content: m.content,
@@ -164,17 +268,103 @@ class DiscordService {
       timestamp: m.createdTimestamp,
       embeds: m.embeds,
       attachments: [...m.attachments.values()],
+      mentions: m.mentions.users.map(u => ({
+        id: u.id,
+        username: u.username,
+        displayName: m.mentions.members?.get(u.id)?.displayName ?? u.globalName ?? u.username,
+      })),
     }));
   }
 
-  async sendMessage(token, channelId, content) {
+  async sendMessage(token, channelId, content, files = []) {
     const client = this.clients.get(token);
     if (!client) throw new Error('Client not logged in');
 
     const channel = client.channels.cache.get(channelId);
     if (!channel) throw new Error('Channel not found');
 
-    return await channel.send(content);
+    const payload = {};
+    if (content) payload.content = content;
+    
+    if (files && files.length > 0) {
+      payload.files = files.map(f => ({
+        attachment: f.buffer,
+        name: f.originalname
+      }));
+    }
+
+    if (!payload.content && (!payload.files || payload.files.length === 0)) {
+      throw new Error('Message must have content or attachments');
+    }
+
+    return await channel.send(payload);
+  }
+
+  async editMessage(token, channelId, messageId, content) {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) throw new Error('Channel not found');
+
+    const message = await channel.messages.fetch(messageId);
+    if (!message) throw new Error('Message not found');
+
+    return await message.edit(content);
+  }
+
+  async deleteMessage(token, channelId, messageId) {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) throw new Error('Channel not found');
+
+    const message = await channel.messages.fetch(messageId);
+    if (!message) throw new Error('Message not found');
+
+    return await message.delete();
+  }
+
+  async setStatus(token, status) {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+
+    // map 'invisible' to 'invisible' (which is offline in discord terms for selfbots mostly, but works)
+    return client.user.setPresence({ status });
+  }
+
+  async getGuildMembers(token, guildId, onlineOnly = false, query = '') {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+    
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) throw new Error('Guild not found');
+
+    // Fetch all members if not cached (might be slow for large guilds)
+    await guild.members.fetch(); 
+
+    let members = Array.from(guild.members.cache.values());
+
+    if (onlineOnly) {
+      members = members.filter(m => m.presence?.status === 'online');
+    }
+
+    if (query) {
+      const lowerCaseQuery = query.toLowerCase();
+      members = members.filter(m => 
+        (m.displayName && m.displayName.toLowerCase().includes(lowerCaseQuery)) ||
+        (m.user.username.toLowerCase().includes(lowerCaseQuery))
+      );
+    }
+
+    return members.map(m => ({
+      id: m.id,
+      username: m.user.username,
+      displayName: m.displayName,
+      avatar: m.user.avatar,
+      status: m.presence?.status || 'offline',
+    }));
   }
 
   async searchMembers(token, guildId, query) {
@@ -189,7 +379,7 @@ class DiscordService {
     if (!guild) throw new Error('Guild not found');
 
     try {
-      const members = await guild.members.search({ query, limit: 10 });
+      const members = await guild.members.search({ query, limit: 3 });
       return members.map(m => ({
         id: m.id,
         username: m.user.username,

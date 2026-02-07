@@ -1,10 +1,11 @@
 import React from 'react';
 import * as emoji from 'node-emoji';
 
-export const parseMessageContent = (content: string): React.ReactNode[] => {
+export const parseMessageContent = (content: string, mentions: any[] = []): React.ReactNode[] => {
   // Regex to match custom emojis: <a:name:id> or <:name:id>
-  // and standard emojis shortcodes: :name:
-  const regex = /<(a?):(\w+):(\d+)>|(:[\w-]+:)/g;
+  // standard emojis shortcodes: :name:
+  // and user mentions: <@id> or <@!id>
+  const regex = /<(a?):(\w+):(\d+)>|(:[\w-]+:)|<@!?(\d+)>/g;
   
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -17,9 +18,19 @@ export const parseMessageContent = (content: string): React.ReactNode[] => {
       parts.push(content.substring(lastIndex, match.index));
     }
 
-    const [, animated, name, id, shortcode] = match;
+    const [, animated, name, id, shortcode, mentionId] = match;
 
-    if (shortcode) {
+    if (mentionId) {
+      // User Mention
+      const user = mentions.find(m => m.id === mentionId);
+      const displayName = user ? (user.displayName || user.username) : 'Unknown User';
+      
+      parts.push(
+        <span key={keyIndex++} className="bg-indigo-500/30 text-indigo-300 px-1 rounded hover:bg-indigo-500/50 cursor-pointer">
+          @{displayName}
+        </span>
+      );
+    } else if (shortcode) {
       // Standard Emoji
       const unicode = emoji.get(shortcode);
       if (unicode) {

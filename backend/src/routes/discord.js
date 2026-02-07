@@ -1,5 +1,8 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 module.exports = (discordService) => {
   router.post('/login', async (req, res) => {
@@ -62,21 +65,57 @@ module.exports = (discordService) => {
     try {
       const token = req.headers['x-discord-token'];
       const { channelId } = req.params;
-      const { limit } = req.query;
-      const messages = await discordService.getMessages(token, channelId, limit ? parseInt(limit) : 50);
+      const { limit, before } = req.query;
+      const messages = await discordService.getMessages(token, channelId, limit ? parseInt(limit) : 50, before);
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  router.post('/messages/:channelId', async (req, res) => {
+  router.post('/messages/:channelId', upload.array('files'), async (req, res) => {
     try {
       const token = req.headers['x-discord-token'];
       const { channelId } = req.params;
       const { content } = req.body;
-      const message = await discordService.sendMessage(token, channelId, content);
+      const files = req.files;
+      
+      const message = await discordService.sendMessage(token, channelId, content, files);
       res.json(message);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.patch('/messages/:channelId/:messageId', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const { channelId, messageId } = req.params;
+      const { content } = req.body;
+      const message = await discordService.editMessage(token, channelId, messageId, content);
+      res.json(message);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.delete('/messages/:channelId/:messageId', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const { channelId, messageId } = req.params;
+      await discordService.deleteMessage(token, channelId, messageId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/status', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const { status } = req.body;
+      await discordService.setStatus(token, status);
+      res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -93,6 +132,26 @@ module.exports = (discordService) => {
       const members = await discordService.searchMembers(token, guildId, query);
       res.json(members);
     } catch (error) {
+      console.error(error); // Log the full error for debugging
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/guilds/:guildId/members', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const { guildId } = req.params;
+      const { onlineOnly, query } = req.query; // Query params are strings
+      
+      const members = await discordService.getGuildMembers(
+        token, 
+        guildId, 
+        onlineOnly === 'true', // Convert string to boolean
+        query ? String(query) : ''
+      );
+      res.json(members);
+    } catch (error) {
+      console.error(error); // Log the full error for debugging
       res.status(500).json({ error: error.message });
     }
   });

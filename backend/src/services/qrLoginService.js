@@ -78,60 +78,73 @@ class QrLoginService {
 
         case 'pending_remote_init':
           const fingerprint = message.fingerprint;
-          socket.emit('qr_code', `https://discord.com/ra/${fingerprint}`);
-          break;
-
-        case 'pending_ticket':
-          const user = message.encrypted_user_payload 
-            ? null // If we wanted to show user info, we'd need to decrypt this too, similar to nonce
-            : null; 
-          // For now, just notify frontend that scan happened
-          socket.emit('qr_scanned');
-          break;
-
-        case 'pending_login':
-          try {
-            const ticket = message.ticket;
-            
-            // Exchange ticket for token
-            const response = await axios.post('https://discord.com/api/v9/users/@me/remote-auth/login', {
-              ticket: ticket
-            });
-
-            const encryptedToken = response.data.encrypted_token;
-            const decryptedTokenBuffer = crypto.privateDecrypt(
-              {
-                key: keyPair.privateKey,
-                padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-                oaepHash: 'sha256'
-              },
-              Buffer.from(encryptedToken, 'base64')
-            );
-            
-            const token = decryptedTokenBuffer.toString('utf-8');
-            socket.emit('qr_success', { token });
-            this.stopSession(socket);
-
-          } catch (err) {
-            console.error('Token exchange failed', err);
-            socket.emit('qr_error', 'Login verification failed');
-            this.stopSession(socket);
-          }
-          break;
-        
-        case 'cancel':
-        case 'finish': 
-          // Finish is usually handled via pending_login -> exchange -> success, 
-          // but sometimes protocol varies.
-          break;
-      }
-    });
-
-    ws.on('close', () => {
-      // socket.emit('qr_error', 'Connection timed out');
-      this.sessions.delete(socket.id);
-    });
-
+                      socket.emit('qr_code_generated', { fingerprint }); // Emit a more specific event
+                    break;
+          
+                  case 'pending_ticket':
+                    // For now, just notify frontend that scan happened
+                    socket.emit('qr_scanned_success'); // Emit a more specific event
+                    break;
+          
+                  case 'pending_login':
+                    try {
+                      const ticket = message.ticket;
+                      
+                      // Exchange ticket for token
+                      const response = await axios.post('https://discord.com/api/v9/users/@me/remote-auth/login', {
+                        ticket: ticket
+                      });
+          
+                      const encryptedToken = response.data.encrypted_token;
+                      const decryptedTokenBuffer = crypto.privateDecrypt(
+                        {
+                          key: keyPair.privateKey,
+                          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+                          oaepHash: 'sha256'
+                        },
+                        Buffer.from(encryptedToken, 'base64')
+                      );
+                      
+                      const token = decryptedTokenBuffer.toString('utf-8');
+                      socket.emit('qr_auth_success', { token }); // Emit a more specific event
+                      this.stopSession(socket);
+          
+                    } catch (err) {
+                      console.error('Token exchange failed', err);
+                      socket.emit('qr_error', 'Login verification failed');
+                      this.stopSession(socket);
+                    }
+                    break;
+                  
+                  case 'cancel':
+                    socket.emit('qr_error', 'QR login cancelled.'); // Emit error on cancel
+                    this.stopSession(socket);
+                    break;
+                  case 'finish': 
+                    // Finish is usually handled via pending_login -> exchange -> success, 
+                    // but sometimes protocol varies.
+                    // If we reach 'finish' without 'qr_auth_success', it implies a timeout or other unhandled state.
+                    socket.emit('qr_error', 'QR login session finished unexpectedly or timed out.');
+                    this.stopSession(socket);
+                    break;
+                }
+              });
+          
+              ws.on('close', (code, reason) => {
+                // If the close was not initiated by us after a successful login, it's an error/timeout
+                if (!this.sessions.has(socket.id)) return; // Already stopped
+                
+                let errorMessage = 'QR connection closed.';
+                if (code === 1000) { // Normal closure
+                  // If it closes normally and we didn't explicitly stop it (e.g. on qr_auth_success), it might be a timeout
+                  errorMessage = 'QR login session timed out.';
+                  socket.emit('qr_error', errorMessage);
+                } else {
+                  errorMessage = `QR connection error: ${reason.toString()}`;
+                  socket.emit('qr_error', errorMessage);
+                }
+                this.sessions.delete(socket.id);
+              });
     // Heartbeat loop
     const heartbeatInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {

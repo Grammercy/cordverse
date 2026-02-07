@@ -89,6 +89,11 @@ io.on('connection', (socket) => {
     qrLoginService.stopSession(socket);
   });
   
+  socket.on('typing', (data) => {
+    // Broadcast to all other clients in the same channel
+    socket.to(data.channelId).emit('typing', data);
+  });
+  
   socket.on('disconnect', () => {
     qrLoginService.stopSession(socket);
     // console.log('user disconnected');

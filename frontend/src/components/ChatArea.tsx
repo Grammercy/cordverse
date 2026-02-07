@@ -1,28 +1,75 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Message } from '../types';
-import { Hash, Send } from 'lucide-react';
+import { Hash, Send, Plus, X, File, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { parseMessageContent } from '../utils/messageParser';
 import api from '../api';
 
 interface ChatAreaProps {
   messages: Message[];
   channelName: string;
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, files?: File[]) => void;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
   guildId: string | null;
+  currentUserId?: string;
+  loadMoreMessages?: () => void;
+  hasMoreMessages?: boolean;
+  typingUsers: Record<string, { username: string, displayName: string }>; // Added for typing indicators
+  onStartTyping: () => void; // Added for typing indicators
+  onStopTyping: () => void; // Added for typing indicators
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessage, guildId }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ 
+  messages, 
+  channelName, 
+  onSendMessage, 
+  onEditMessage, 
+  onDeleteMessage, 
+  guildId, 
+  currentUserId,
+  loadMoreMessages,
+  hasMoreMessages,
+  typingUsers,
+  onStartTyping,
+  onStopTyping
+}) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Mention State
   const [mentions, setMentions] = useState<any[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  
+  // File State
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Editing State
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+
+  // Typing State
+  const typingTimeoutRef = useRef<number | null>(null);
+
+  const initialScrollDone = useRef(false);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && !initialScrollDone.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        initialScrollDone.current = true;
+    } else if (messagesEndRef.current && !editingMessageId) {
+        const chatArea = scrollRef.current;
+        if (chatArea) {
+            const isAtBottom = chatArea.scrollHeight - chatArea.scrollTop <= chatArea.clientHeight + 100;
+            if (isAtBottom) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }
   };
 
   useEffect(() => {
@@ -31,30 +78,80 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
 
   useEffect(() => {
      setShowMentions(false);
-  }, [channelName]);
+     setSearchQuery(null);
+     setFiles([]);
+     setEditingMessageId(null);
+     initialScrollDone.current = false; // Reset for new channels
+     if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+        onStopTyping();
+     }
+  }, [channelName, onStopTyping]);
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInput(val);
-    
-    const cursor = e.target.selectionStart || val.length;
-    const textBeforeCursor = val.slice(0, cursor);
-    const match = textBeforeCursor.match(/@(\w*)$/);
-    
-    if (match && guildId && guildId !== '@me') {
-        const query = match[1];
-        // Only search if we have at least 1 char or if the user explicitly wants top members (empty query)
-        // But searching empty query on huge servers might return randoms. 
-        // Let's allow it but the backend limits to 10.
+  // Debounce search effect
+  useEffect(() => {
+    if (searchQuery === null) return;
+
+    const timeoutId = setTimeout(async () => {
+      if (guildId && guildId !== '@me') {
         try {
-             const res = await api.get(`/api/discord/members/${guildId}?query=${query}`);
+             const res = await api.get(`/api/discord/members/${guildId}?query=${searchQuery}`);
              setMentions(res.data);
              setShowMentions(res.data.length > 0);
              setMentionIndex(0);
         } catch (err) {
              console.error(err);
         }
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, guildId]);
+
+  // Infinite Scroll Logic
+  const handleScroll = useCallback(() => {
+    const chatArea = scrollRef.current;
+    if (chatArea && chatArea.scrollTop === 0 && hasMoreMessages && loadMoreMessages) {
+      loadMoreMessages();
+    }
+  }, [hasMoreMessages, loadMoreMessages]);
+
+  useEffect(() => {
+    const chatArea = scrollRef.current;
+    if (chatArea) {
+      chatArea.addEventListener('scroll', handleScroll);
+      return () => {
+        chatArea.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [handleScroll]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInput(val);
+    
+    // Typing indicator logic
+    if (val.length > 0 && !typingTimeoutRef.current) {
+      onStartTyping();
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      onStopTyping();
+      typingTimeoutRef.current = null;
+    }, 5000); // Stop typing after 5 seconds of inactivity
+
+
+    const cursor = e.target.selectionStart || val.length;
+    const textBeforeCursor = val.slice(0, cursor);
+    const match = textBeforeCursor.match(/@([a-zA-Z0-9_\- ]*)$/);
+    
+    if (match && guildId && guildId !== '@me') {
+        setSearchQuery(match[1]);
     } else {
+        setSearchQuery(null);
         setShowMentions(false);
     }
   };
@@ -81,7 +178,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
       const textBeforeCursor = input.slice(0, cursor);
       const textAfterCursor = input.slice(cursor);
       
-      const match = textBeforeCursor.match(/@(\w*)$/);
+      const match = textBeforeCursor.match(/@([a-zA-Z0-9_\- ]*)$/);
       if (match) {
           const prefix = textBeforeCursor.slice(0, match.index);
           const replacement = `<@${user.id}>`; 
@@ -89,14 +186,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
           const newVal = prefix + replacement + ' ' + textAfterCursor;
           setInput(newVal);
           setShowMentions(false);
-          // Ideally move cursor after mention.
+          setSearchQuery(null);
+          
           setTimeout(() => {
               if (inputRef.current) {
-                  const newCursorPos = prefix.length + replacement.length + 1; // +1 for space?
-                  // I didn't add space in newVal logic above (prefix + replacement + ' ' + textAfterCursor) ?
-                  // Wait, previous logic was: prefix + replacement + ' ' + textAfterCursor;
-                  // So yes.
-                  // Cursor should be at newPos.
+                  const newCursorPos = prefix.length + replacement.length + 1;
                   inputRef.current.focus();
                   inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
               }
@@ -104,14 +198,67 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
       }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+          setFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeFile = (index: number) => {
+      setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) {
-      onSendMessage(input);
+    if (input.trim() || files.length > 0) {
+      onSendMessage(input, files);
       setInput('');
+      setFiles([]);
       setShowMentions(false);
+      setSearchQuery(null);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+        onStopTyping();
+      }
     }
   };
+
+  const startEditing = (msg: Message) => {
+    setEditingMessageId(msg.id);
+    setEditContent(msg.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditContent('');
+  };
+
+  const saveEdit = (msgId: string) => {
+    if (onEditMessage && editContent.trim()) {
+      onEditMessage(msgId, editContent);
+      setEditingMessageId(null);
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, msgId: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit(msgId);
+    } else if (e.key === 'Escape') {
+      cancelEditing();
+    }
+  };
+
+  const typingUserNames = Object.values(typingUsers)
+                                .filter(u => u.displayName || u.username)
+                                .map(u => u.displayName || u.username);
+  const typingStatusText = typingUserNames.length > 0 
+    ? typingUserNames.length === 1 
+      ? `${typingUserNames[0]} is typing...` 
+      : `${typingUserNames.slice(0, 2).join(', ')}${typingUserNames.length > 2 ? ` and ${typingUserNames.length - 2} others` : ''} are typing...`
+    : '';
 
   return (
     <div className="flex-1 flex flex-col bg-gray-700">
@@ -120,9 +267,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
         <h3 className="text-white font-bold">{channelName}</h3>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        {hasMoreMessages && (
+          <div className="flex justify-center p-2">
+            <Loader2 className="animate-spin text-gray-400" size={24} />
+          </div>
+        )}
         {messages.map((msg) => (
-          <div key={msg.id} className="flex space-x-3 group">
+          <div key={msg.id} className="flex space-x-3 group relative hover:bg-gray-800/30 -mx-2 px-2 py-1 rounded">
             <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0 overflow-hidden">
               {msg.author.avatar ? (
                 <img 
@@ -136,7 +288,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
                 </div>
               )}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex items-baseline space-x-2">
                 <span className="text-white font-medium hover:underline cursor-pointer">
                   {msg.author.displayName || msg.author.username}
@@ -145,7 +297,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
                   {new Date(msg.timestamp).toLocaleString()}
                 </span>
               </div>
-              <p className="text-gray-200 whitespace-pre-wrap break-words">{parseMessageContent(msg.content)}</p>
+              
+              {editingMessageId === msg.id ? (
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    className="w-full bg-gray-600 text-gray-200 rounded p-2 outline-none border border-indigo-500"
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    onKeyDown={(e) => handleEditKeyDown(e, msg.id)}
+                    autoFocus
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    Escape to cancel • Enter to save
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-200 whitespace-pre-wrap break-words">
+                  {parseMessageContent(msg.content, msg.mentions)}
+                </p>
+              )}
               
               {/* Attachments */}
               {msg.attachments && msg.attachments.length > 0 && (
@@ -199,12 +370,33 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
                 </div>
               )}
             </div>
+
+            {/* Actions */}
+            {currentUserId && msg.author.id === currentUserId && !editingMessageId && (
+               <div className="absolute top-0 right-2 bg-gray-800 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center p-1 space-x-1">
+                 <button 
+                   onClick={() => startEditing(msg)} 
+                   className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                   title="Edit"
+                 >
+                   <Pencil size={14} />
+                 </button>
+                 <button 
+                   onClick={() => onDeleteMessage && onDeleteMessage(msg.id)}
+                   className="p-1 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
+                   title="Delete"
+                 >
+                   <Trash2 size={14} />
+                 </button>
+               </div>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 relative">
+      <div className="p-4 relative bg-gray-700">
+        {/* Mentions Dropdown */}
         {showMentions && mentions.length > 0 && (
             <div className="absolute bottom-full left-4 mb-2 w-64 bg-gray-800 border border-gray-900 rounded-lg shadow-xl overflow-hidden z-10">
                 <div className="text-xs text-gray-400 uppercase font-bold px-3 py-2 bg-gray-900">
@@ -235,8 +427,41 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
                 </div>
             </div>
         )}
+        
+        {/* File Preview */}
+        {files.length > 0 && (
+            <div className="flex space-x-2 overflow-x-auto pb-2 mb-2 px-2">
+                {files.map((file, idx) => (
+                    <div key={idx} className="relative bg-gray-800 rounded p-2 w-32 flex flex-col items-center group flex-shrink-0">
+                        <button 
+                            onClick={() => removeFile(idx)}
+                            className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <X size={12} />
+                        </button>
+                        <File className="w-8 h-8 text-gray-400 mb-1" />
+                        <span className="text-xs text-gray-300 truncate w-full text-center" title={file.name}>{file.name}</span>
+                    </div>
+                ))}
+            </div>
+        )}
 
         <form onSubmit={handleSubmit} className="bg-gray-600 rounded-lg flex items-center px-4 py-2">
+          <button 
+             type="button" 
+             onClick={() => fileInputRef.current?.click()}
+             className="text-gray-400 hover:text-white mr-3 flex-shrink-0"
+          >
+             <Plus className="w-5 h-5 bg-gray-500 rounded-full p-0.5 text-gray-200" />
+          </button>
+          <input 
+             type="file" 
+             ref={fileInputRef} 
+             onChange={handleFileSelect} 
+             multiple 
+             className="hidden" 
+          />
+
           <input
             ref={inputRef}
             type="text"
@@ -250,6 +475,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
             <Send className="w-5 h-5" />
           </button>
         </form>
+        {typingStatusText && (
+          <div className="text-sm text-gray-400 mt-2 px-2">
+            {typingStatusText}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -22,8 +22,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
   
   // QR State
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [qrStatus, setQrStatus] = useState<'init' | 'waiting' | 'scanned' | 'success' | 'error'>('init');
+  const [qrStatus, setQrStatus] = useState<'init' | 'generating' | 'waiting' | 'scanned' | 'authenticating' | 'success' | 'error'>('init');
+  const [qrUrl, setQrUrl] = useState<string | null>(null); // Re-added qrUrl state
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -42,21 +42,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     socket.on('connect', () => {
       if (activeTab === 'qr') {
         socket.emit('start_qr');
-        setQrStatus('init');
+        setQrStatus('generating'); // Set status to generating when requesting QR
       }
     });
 
-    socket.on('qr_code', (url: string) => {
-      setQrUrl(url);
+    socket.on('qr_code_generated', (data: { fingerprint: string }) => {
+      setQrUrl(`https://discord.com/ra/${data.fingerprint}`);
       setQrStatus('waiting');
+      setError('');
     });
 
-    socket.on('qr_scanned', () => {
+    socket.on('qr_scanned_success', () => {
       setQrStatus('scanned');
+      setError('');
     });
 
-    socket.on('qr_success', (data: { token: string }) => {
+    socket.on('qr_auth_success', (data: { token: string }) => {
       setQrStatus('success');
+      setError('');
       handleLogin({ token: data.token });
     });
 
@@ -74,11 +77,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   useEffect(() => {
     if (activeTab === 'qr' && socketRef.current?.connected) {
       setQrUrl(null);
-      setQrStatus('init');
+      setQrStatus('generating'); // Indicate generation started
       setError('');
       socketRef.current.emit('start_qr');
     } else if (activeTab !== 'qr') {
       socketRef.current?.emit('stop_qr');
+      setQrUrl(null); // Clear QR when not on tab
+      setQrStatus('init');
+      setError('');
     }
   }, [activeTab]);
 
@@ -86,16 +92,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       const res = await api.get('/api/accounts');
       setSavedAccounts(res.data);
-      // If we have saved accounts, maybe default to that tab? 
-      // But user requested "login page before account select". 
-      // So keeping QR as default or 'saved' as default is a choice.
-      // Let's stick to QR as default if requested, but allow switching.
       if (res.data.length > 0 && activeTab === 'qr') {
-        // Optional: setActiveTab('saved'); 
+        // No default tab change for now.
       }
     } catch (err: any) {
       console.error('Failed to fetch accounts', err);
-      // If unauthorized, our master token is bad. Reload to force lock screen.
       if (err.response && err.response.status === 401) {
         localStorage.removeItem('cordverse_master_token');
         window.location.reload();
@@ -111,7 +112,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       onLogin(response.data.token, response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to login');
-      setQrStatus('error');
+      // Only set qrStatus to error if we are on the QR tab and it's a direct login error
+      if (activeTab === 'qr') setQrStatus('error'); 
     } finally {
       setLoading(false);
     }
@@ -120,6 +122,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleLogin({ token });
+  };
+
+  const getQrStatusMessage = () => {
+    switch (qrStatus) {
+      case 'generating': return 'Generating QR Code...';
+      case 'waiting': return 'Waiting for scan...';
+      case 'scanned': return 'QR Code scanned! Authenticating...';
+      case 'authenticating': return 'Authenticating...'; // Potentially useful if ticket exchange is long
+      case 'success': return 'Login successful! Redirecting...';
+      case 'error': return 'Login failed. Please retry.';
+      default: return '';
+    }
   };
 
   return (
@@ -163,17 +177,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </p>
 
               <div className="relative bg-white p-4 rounded-lg mb-6 group">
-                {qrUrl ? (
-                  <div className={`transition-opacity duration-300 ${qrStatus === 'scanned' ? 'opacity-25' : 'opacity-100'}`}>
+                {(qrUrl && qrStatus !== 'error') ? (
+                  <div className={`transition-opacity duration-300 ${qrStatus === 'scanned' || qrStatus === 'authenticating' ? 'opacity-25' : 'opacity-100'}`}>
                     <QRCodeSVG value={qrUrl} size={180} />
                   </div>
                 ) : (
                   <div className="w-[180px] h-[180px] flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    {(qrStatus === 'init' || qrStatus === 'generating') ? (
+                      <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-gray-700">QR</div>
+                    )}
                   </div>
                 )}
                 
-                {qrStatus === 'scanned' && (
+                {(qrStatus === 'scanned' || qrStatus === 'authenticating') && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="bg-indigo-600 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-bounce">
                       Check your phone!
@@ -184,7 +202,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 {qrStatus === 'error' && (
                    <div className="absolute inset-0 flex items-center justify-center bg-gray-800/80 rounded-lg">
                       <button 
-                        onClick={() => { setQrStatus('init'); socketRef.current?.emit('start_qr'); }}
+                        onClick={() => { setQrStatus('generating'); socketRef.current?.emit('start_qr'); }}
                         className="text-white flex flex-col items-center gap-2 hover:text-indigo-400"
                       >
                         <RefreshCw size={24} />
@@ -194,8 +212,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 )}
               </div>
 
-              {qrStatus === 'success' && (
-                 <p className="text-green-400 font-medium">Login successful! Redirecting...</p>
+              {qrStatus !== 'init' && qrStatus !== 'error' && (
+                <p className={`font-medium ${qrStatus === 'success' ? 'text-green-400' : 'text-indigo-400'}`}>
+                  {getQrStatusMessage()}
+                </p>
               )}
             </div>
           )}
