@@ -64,10 +64,13 @@ function App() {
       api.post(`${API_BASE}/login`, { token })
         .then(res => {
           setAccount(res.data);
+          const activeToken = res.data.token || token;
           if (res.data.token && res.data.token !== token) {
              setToken(res.data.token);
              localStorage.setItem('cordverse_token', res.data.token);
           }
+          // Fetch guilds after successful login to ensure backend client is ready
+          fetchGuilds(activeToken);
         })
         .catch(err => {
           console.error('Token invalid or login failed', err);
@@ -83,8 +86,6 @@ function App() {
           setMessages((prev) => [...prev, msg]);
         }
       });
-
-      fetchGuilds(token);
 
       return () => {
         newSocket.close();
