@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import ChannelList from './components/ChannelList';
 import ChatArea from './components/ChatArea';
 import Login from './components/Login';
+import MasterLock from './components/MasterLock';
 import type { Account, Guild, Channel, Message } from './types';
 
 // Use relative path for API calls. 
@@ -14,6 +15,8 @@ import type { Account, Guild, Channel, Message } from './types';
 const API_BASE = '/api/discord';
 
 function App() {
+  const [isLocked, setIsLocked] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [token, setToken] = useState<string | null>(localStorage.getItem('cordverse_token'));
   const [account, setAccount] = useState<Account | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -24,11 +27,37 @@ function App() {
   const selectedChannelIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Check Master Password Auth
+    const checkMasterAuth = async () => {
+      const masterToken = localStorage.getItem('cordverse_master_token');
+      if (!masterToken) {
+        setCheckingAuth(false);
+        return;
+      }
+
+      try {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${masterToken}`;
+        await axios.get('/api/auth/verify');
+        setIsLocked(false);
+      } catch (err) {
+        console.error('Master auth failed', err);
+        localStorage.removeItem('cordverse_master_token');
+        delete axios.defaults.headers.common['Authorization'];
+        setIsLocked(true);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkMasterAuth();
+  }, []);
+
+  useEffect(() => {
     selectedChannelIdRef.current = selectedChannelId;
   }, [selectedChannelId]);
 
   useEffect(() => {
-    if (token) {
+    if (token && !isLocked) {
       // Re-login/Verify token to get user info
       // Note: We use relative URL here too
       axios.post(`${API_BASE}/login`, { token })
@@ -60,12 +89,12 @@ function App() {
         newSocket.close();
       };
     }
-  }, [token]);
+  }, [token, isLocked]);
 
   const fetchGuilds = async (authToken: string) => {
     try {
       const res = await axios.get(`${API_BASE}/guilds`, {
-        headers: { Authorization: authToken }
+        headers: { 'X-Discord-Token': authToken }
       });
       setGuilds(res.data);
     } catch (err) {
@@ -76,7 +105,7 @@ function App() {
   const fetchChannels = async (guildId: string) => {
     try {
       const res = await axios.get(`${API_BASE}/channels/${guildId}`, {
-        headers: { Authorization: token }
+        headers: { 'X-Discord-Token': token }
       });
       setChannels(res.data);
     } catch (err) {
@@ -87,7 +116,7 @@ function App() {
   const fetchMessages = async (channelId: string) => {
     try {
       const res = await axios.get(`${API_BASE}/messages/${channelId}`, {
-        headers: { Authorization: token }
+        headers: { 'X-Discord-Token': token }
       });
       setMessages(res.data.reverse());
     } catch (err) {
@@ -132,55 +161,21 @@ function App() {
     if (!selectedChannelId || !token) return;
     try {
       await axios.post(`${API_BASE}/messages/${selectedChannelId}`, { content }, {
-        headers: { Authorization: token }
+        headers: { 'X-Discord-Token': token }
       });
     } catch (err) {
       console.error('Failed to send message', err);
     }
   };
 
+  if (checkingAuth) {
+    return <div className="flex h-screen items-center justify-center bg-gray-900 text-gray-100">Loading...</div>;
+  }
+
+  if (isLocked) {
+    return <MasterLock onUnlock={() => setIsLocked(false)} />;
+  }
+
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
-
-  const selectedGuild = guilds.find(g => g.id === selectedGuildId);
-  const selectedChannel = channels.find(c => c.id === selectedChannelId);
-
-  return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 overflow-hidden">
-      <Sidebar 
-        guilds={guilds} 
-        selectedGuildId={selectedGuildId} 
-        onSelectGuild={handleSelectGuild}
-        account={account}
-        onLogout={handleLogout}
-      />
-      
-      {selectedGuildId && (
-        <ChannelList 
-          channels={channels} 
-          selectedChannelId={selectedChannelId} 
-          onSelectChannel={handleSelectChannel}
-          guildName={selectedGuild?.name || 'Guild'}
-        />
-      )}
-
-      {selectedChannelId ? (
-        <ChatArea 
-          messages={messages} 
-          channelName={selectedChannel?.name || 'channel'} 
-          onSendMessage={handleSendMessage}
-        />
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center bg-gray-700">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-2">Welcome to Cordverse</h2>
-            <p className="text-gray-400">Select a channel to start chatting</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default App;

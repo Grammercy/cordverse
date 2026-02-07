@@ -4,9 +4,11 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 const db = require('./db');
 const DiscordService = require('./services/discordService');
 const discordRoutes = require('./routes/discord');
+const { requireAuth, JWT_SECRET } = require('./middleware/auth');
 
 dotenv.config();
 
@@ -19,6 +21,12 @@ const io = new Server(server, {
   }
 });
 
+// Master Password Check
+const MASTER_PASSWORD = process.env.CORDVERSE_PASSWORD;
+if (!MASTER_PASSWORD) {
+  console.warn("⚠️  WARNING: CORDVERSE_PASSWORD is not set in .env! The app is insecure.");
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -27,13 +35,34 @@ app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
 const discordService = new DiscordService(io);
 
-app.use('/api/discord', discordRoutes(discordService));
+// Auth Route
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  
+  if (!MASTER_PASSWORD) {
+    return res.status(500).json({ error: 'Server security not configured (CORDVERSE_PASSWORD missing)' });
+  }
+
+  if (password === MASTER_PASSWORD) {
+    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ token });
+  }
+
+  return res.status(401).json({ error: 'Invalid password' });
+});
+
+app.get('/api/auth/verify', requireAuth, (req, res) => {
+  res.json({ valid: true });
+});
+
+// Protected Routes
+app.use('/api/discord', requireAuth, discordRoutes(discordService));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/accounts', (req, res) => {
+app.get('/api/accounts', requireAuth, (req, res) => {
   const accounts = db.prepare('SELECT id, username, avatar FROM accounts').all();
   res.json(accounts);
 });

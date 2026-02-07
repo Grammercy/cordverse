@@ -28,7 +28,7 @@ module.exports = (discordService) => {
 
   router.get('/guilds', async (req, res) => {
     try {
-      const token = req.headers.authorization;
+      const token = req.headers['x-discord-token'];
       const guilds = await discordService.getGuilds(token);
       res.json(guilds);
     } catch (error) {
@@ -38,7 +38,7 @@ module.exports = (discordService) => {
 
   router.get('/channels/:guildId', async (req, res) => {
     try {
-      const token = req.headers.authorization;
+      const token = req.headers['x-discord-token'];
       const { guildId } = req.params;
       const channels = await discordService.getChannels(token, guildId);
       res.json(channels);
@@ -49,7 +49,7 @@ module.exports = (discordService) => {
 
   router.get('/messages/:channelId', async (req, res) => {
     try {
-      const token = req.headers.authorization;
+      const token = req.headers['x-discord-token'];
       const { channelId } = req.params;
       const { limit } = req.query;
       const messages = await discordService.getMessages(token, channelId, limit ? parseInt(limit) : 50);
@@ -61,7 +61,7 @@ module.exports = (discordService) => {
 
   router.post('/messages/:channelId', async (req, res) => {
     try {
-      const token = req.headers.authorization;
+      const token = req.headers['x-discord-token'];
       const { channelId } = req.params;
       const { content } = req.body;
       const message = await discordService.sendMessage(token, channelId, content);
