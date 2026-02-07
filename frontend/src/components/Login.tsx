@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../api';
+import api, { setMasterToken } from '../api';
 import { QRCodeSVG } from 'qrcode.react';
 import { io, Socket } from 'socket.io-client';
 import { RefreshCw, Smartphone, Key, User } from 'lucide-react';
@@ -27,6 +27,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    // Ensure header is set (Safety net)
+    const masterToken = localStorage.getItem('cordverse_master_token');
+    if (masterToken) {
+      setMasterToken(masterToken);
+    }
+
     fetchSavedAccounts();
     
     // Connect socket for QR
@@ -87,8 +93,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       if (res.data.length > 0 && activeTab === 'qr') {
         // Optional: setActiveTab('saved'); 
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch accounts', err);
+      // If unauthorized, our master token is bad. Reload to force lock screen.
+      if (err.response && err.response.status === 401) {
+        localStorage.removeItem('cordverse_master_token');
+        window.location.reload();
+      }
     }
   };
 
