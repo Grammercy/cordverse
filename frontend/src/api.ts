@@ -5,6 +5,9 @@ const api = axios.create({
   // Base config can go here if needed
 });
 
+// Set the base URL for all requests
+api.defaults.baseURL = '/';
+
 // Helper to set the master token
 export const setMasterToken = (token: string) => {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
