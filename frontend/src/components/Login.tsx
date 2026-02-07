@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api';
 
 interface LoginProps {
   onLogin: (token: string, account: any) => void;
@@ -23,7 +23,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const fetchSavedAccounts = async () => {
     try {
-      const res = await axios.get('/api/accounts');
+      const res = await api.get('/api/accounts');
       setSavedAccounts(res.data);
     } catch (err) {
       console.error('Failed to fetch accounts', err);
@@ -34,7 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.post('/api/discord/login', credentials);
+      const response = await api.post('/api/discord/login', credentials);
       onLogin(response.data.token, response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to login');

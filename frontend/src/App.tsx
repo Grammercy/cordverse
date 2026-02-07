@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import { io } from 'socket.io-client';
+import api, { setMasterToken, clearMasterToken } from './api';
 import Sidebar from './components/Sidebar';
 import ChannelList from './components/ChannelList';
 import ChatArea from './components/ChatArea';
@@ -36,13 +36,12 @@ function App() {
       }
 
       try {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${masterToken}`;
-        await axios.get('/api/auth/verify');
+        // Token is already set in api defaults by api.ts initialization
+        await api.get('/api/auth/verify');
         setIsLocked(false);
       } catch (err) {
         console.error('Master auth failed', err);
-        localStorage.removeItem('cordverse_master_token');
-        delete axios.defaults.headers.common['Authorization'];
+        clearMasterToken();
         setIsLocked(true);
       } finally {
         setCheckingAuth(false);
@@ -60,7 +59,7 @@ function App() {
     if (token && !isLocked) {
       // Re-login/Verify token to get user info
       // Note: We use relative URL here too
-      axios.post(`${API_BASE}/login`, { token })
+      api.post(`${API_BASE}/login`, { token })
         .then(res => {
           setAccount(res.data);
           if (res.data.token && res.data.token !== token) {
@@ -93,7 +92,7 @@ function App() {
 
   const fetchGuilds = async (authToken: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/guilds`, {
+      const res = await api.get(`${API_BASE}/guilds`, {
         headers: { 'X-Discord-Token': authToken }
       });
       setGuilds(res.data);
@@ -104,7 +103,7 @@ function App() {
 
   const fetchChannels = async (guildId: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/channels/${guildId}`, {
+      const res = await api.get(`${API_BASE}/channels/${guildId}`, {
         headers: { 'X-Discord-Token': token }
       });
       setChannels(res.data);
@@ -115,7 +114,7 @@ function App() {
 
   const fetchMessages = async (channelId: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/messages/${channelId}`, {
+      const res = await api.get(`${API_BASE}/messages/${channelId}`, {
         headers: { 'X-Discord-Token': token }
       });
       setMessages(res.data.reverse());
@@ -160,7 +159,7 @@ function App() {
   const handleSendMessage = async (content: string) => {
     if (!selectedChannelId || !token) return;
     try {
-      await axios.post(`${API_BASE}/messages/${selectedChannelId}`, { content }, {
+      await api.post(`${API_BASE}/messages/${selectedChannelId}`, { content }, {
         headers: { 'X-Discord-Token': token }
       });
     } catch (err) {

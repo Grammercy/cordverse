@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api, { setMasterToken } from '../api';
 import { Lock } from 'lucide-react';
 
 interface MasterLockProps {
@@ -17,14 +17,11 @@ const MasterLock: React.FC<MasterLockProps> = ({ onUnlock }) => {
     setError('');
 
     try {
-      const res = await axios.post('/api/auth/login', { password });
+      const res = await api.post('/api/auth/login', { password });
       const token = res.data.token;
       
-      // Store the master session token
-      localStorage.setItem('cordverse_master_token', token);
-      
-      // Configure global axios default for future requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Use helper to set token
+      setMasterToken(token);
       
       onUnlock();
     } catch (err: any) {
