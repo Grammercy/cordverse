@@ -15,6 +15,8 @@ import type { Account, Guild, Channel, Message } from './types';
 const API_BASE = '/api/discord';
 
 function App() {
+  console.log("Cordverse App Version: 3.0 (Master Lock Enabled)");
+  
   const [isLocked, setIsLocked] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [token, setToken] = useState<string | null>(localStorage.getItem('cordverse_token'));
