@@ -32,6 +32,7 @@ class DiscordService {
     const client = new Client({
       checkUpdate: false,
     });
+    client.setMaxListeners(20); // Increase limit for guildMembersChunk listeners to suppress warning
 
     return new Promise((resolve, reject) => {
       client.on('ready', () => {
@@ -341,9 +342,8 @@ class DiscordService {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) throw new Error('Guild not found');
 
-    // Fetch all members if not cached (might be slow for large guilds)
-    await guild.members.fetch(); 
-
+    // Rely on guild.members.cache which should be populated by intents.
+    // Explicit guild.members.fetch() often adds event listeners that can exceed limits.
     let members = Array.from(guild.members.cache.values());
 
     if (onlineOnly) {

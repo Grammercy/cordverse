@@ -29,7 +29,17 @@ function App() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true); // Declared once
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const selectedChannelIdRef = useRef<string | null>(null);
+  const [selectedChannelIdRef] = useState(() => useRef<string | null>(null));
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const savedTheme = localStorage.getItem('cordverse_theme');
+    return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(theme);
+    localStorage.setItem('cordverse_theme', theme);
+  }, [theme]);
 
   // Define handleLogout here, before it's used in useEffect
   const handleLogout = () => {
@@ -273,6 +283,10 @@ function App() {
     // For now, relies on auto-timeout
   };
 
+  const toggleTheme = () => {
+    setTheme(prevTheme => (prevTheme === 'dark' ? 'light' : 'dark'));
+  };
+
   const handleLogin = (newToken: string, user: Account) => {
     setToken(newToken);
     setAccount(user);
@@ -373,6 +387,9 @@ function App() {
         onSelectGuild={handleSelectGuild}
         account={account}
         onLogout={handleLogout}
+        onLogin={handleLogin} // Pass handleLogin for account switching
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
       
       {selectedGuildId && (
