@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Message } from '../types';
 import { Hash, Send } from 'lucide-react';
+import { parseMessageContent } from '../utils/messageParser';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -60,7 +61,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, channelName, onSendMessag
                   {new Date(msg.timestamp).toLocaleString()}
                 </span>
               </div>
-              <p className="text-gray-200 whitespace-pre-wrap break-words">{msg.content}</p>
+              <p className="text-gray-200 whitespace-pre-wrap break-words">{parseMessageContent(msg.content)}</p>
               
               {/* Attachments */}
               {msg.attachments && msg.attachments.length > 0 && (
