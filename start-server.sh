@@ -7,11 +7,16 @@ echo "Starting Cordverse Server on port $PORT..."
 
 # Ensure frontend is built
 echo "Building frontend..."
-cd frontend && npm run build
+cd frontend
+npm install
+npm run build
 cd ..
 
 # Run backend using PM2
 echo "Starting backend with PM2..."
+cd backend
+npm install
+cd ..
 
 # Check if PM2 is installed
 if ! command -v pm2 &> /dev/null
