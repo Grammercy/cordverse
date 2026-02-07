@@ -29,7 +29,7 @@ function App() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true); // Declared once
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const [selectedChannelIdRef] = useState(() => useRef<string | null>(null));
+  const selectedChannelIdRef = useRef<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const savedTheme = localStorage.getItem('cordverse_theme');
     return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
