@@ -3,11 +3,11 @@
 ## Project Overview
 **Cordverse** is a self-hosted, privacy-focused Discord client designed to act as a secure proxy between the browser and Discord's API. It allows users to manage multiple accounts, encrypts tokens at rest, and provides a "self-bot" interface for chatting.
 
-The architecture consists of a unified Node.js backend that serves the React frontend and handles all Discord Gateway/API communication.
+The architecture consists of a unified Node.js backend that serves the React frontend and handles all Discord Gateway/API communication, including a custom implementation of Discord's Remote Auth (QR Code Login).
 
 ### Main Technologies
-*   **Backend:** Node.js, Express (v5), Socket.IO, `better-sqlite3`, `discord.js-selfbot-v13`, `crypto-js`.
-*   **Frontend:** React, Vite, TailwindCSS, Axios, Lucide React.
+*   **Backend:** Node.js, Express (v5), Socket.IO, `better-sqlite3`, `discord.js-selfbot-v13`, `crypto-js`, `jsonwebtoken`.
+*   **Frontend:** React 19, Vite, TailwindCSS 4, Axios, Lucide React, `qrcode.react`.
 *   **Database:** SQLite (local file `backend/data/cordverse.db`).
 *   **Deployment:** PM2, GitHub Actions.
 
@@ -51,7 +51,9 @@ pm2 start ecosystem.config.js --env production
 *   **Backend:** `backend/src/index.js` is configured to serve static files from `frontend/dist`.
 *   **SPA Routing:** The backend uses an Express v5 regex route `app.get(/(.*)/, ...)` to serve `index.html` for all non-API requests, supporting client-side routing.
 
-### 2. Security
+### 2. Security & Authentication
+*   **Level 1 (Server Access):** Users must authenticate with the `CORDVERSE_PASSWORD` (env var) to access the client UI. A JWT is issued upon success.
+*   **Level 2 (Discord Access):** Users login to Discord via Token or QR Code.
 *   **Token Storage:** Discord tokens are **never** stored in plain text. They are encrypted using `AES-256` (via `crypto-js`) before being saved to the SQLite database.
 *   **Encryption Key:** Controlled by `ENCRYPTION_KEY` in `backend/.env`.
 
@@ -69,22 +71,56 @@ pm2 start ecosystem.config.js --env production
 *   **Ignored Files:** `node_modules`, `.env`, `dist/`, `build/` are ignored.
 *   **Native Modules:** Because `better-sqlite3` is a native module, `node_modules` must **not** be committed. They are installed fresh on the deployment target to match the server's Node.js version/architecture.
 
+## Database Schema
+**File:** `backend/data/cordverse.db` (SQLite)
+
+*   **`accounts`**: Stores saved Discord accounts.
+    *   `id` (TEXT, PK): Discord User ID.
+    *   `token` (TEXT): Encrypted Discord Token.
+    *   `username` (TEXT): Discord Username.
+    *   `discriminator` (TEXT): Discord Discriminator (legacy).
+    *   `avatar` (TEXT): Avatar hash.
+    *   `created_at` (DATETIME).
+*   **`settings`**: Key-value store for app configs.
+    *   `key` (TEXT, PK).
+    *   `value` (TEXT).
+
+## Services & Features
+
+### Backend
+*   **`QrLoginService`**: Implements Discord's Remote Auth via WebSocket (`wss://remote-auth-gateway.discord.gg`). Handles RSA key generation, nonce decryption, and token exchange. Communicates with frontend via Socket.IO events (`start_qr`, `qr_code`, `qr_scanned`, `qr_success`).
+*   **`DiscordService`**: Wraps `discord.js-selfbot-v13` to provide client functionality (login, fetch guilds/channels/messages).
+*   **`Auth`**: JWT-based protection for all API routes.
+
+### Frontend
+*   **`Login.tsx`**: Unified login interface supporting:
+    *   **QR Code (v2):** Live generation and status updates via Socket.IO.
+    *   **Token Input:** Manual token entry.
+    *   **Saved Accounts:** Quick login from local DB.
+*   **`MasterLock.tsx`**: (Presumed) Screen for entering the `CORDVERSE_PASSWORD`.
+*   **`ChatArea.tsx` / `ChannelList.tsx`**: Main chat interface.
+
 ## Directory Structure
 ```
 /
 ├── backend/                 # Node.js Express Server
-│   ├── data/                # SQLite database location
+│   ├── data/                # SQLite database location (cordverse.db)
 │   ├── src/
-│   │   ├── services/        # Discord logic & Socket.IO events
-│   │   ├── routes/          # API endpoints
+│   │   ├── services/        # Logic: DiscordService, QrLoginService
+│   │   ├── routes/          # API: discord.js (login, guilds, messages)
+│   │   ├── middleware/      # Auth middleware
+│   │   ├── models/          # (Empty/Future use)
 │   │   ├── utils/           # Crypto/Helper functions
-│   │   └── index.js         # Entry point
-│   └── .env                 # Secrets (PORT, ENCRYPTION_KEY)
+│   │   ├── db.js            # Database init & schema
+│   │   └── index.js         # Entry point & Socket.IO setup
+│   └── .env                 # Secrets (PORT, ENCRYPTION_KEY, CORDVERSE_PASSWORD)
 ├── frontend/                # React Vite App
 │   ├── src/
-│   │   ├── components/      # UI Components (Chat, Sidebar, Login)
-│   │   └── App.tsx          # Main Logic & Socket connection
-│   └── vite.config.ts       # Build config
+│   │   ├── components/      # UI: Login, ChatArea, Sidebar, etc.
+│   │   ├── api.ts           # Axios instance & interceptors
+│   │   └── App.tsx          # Main Logic & Layout
+│   ├── vite.config.ts       # Build config
+│   └── package.json         # React 19, Tailwind 4
 ├── ecosystem.config.js      # PM2 Production Config
 ├── start-server.sh          # Unified build & start script
 └── .github/workflows/       # Deployment automation

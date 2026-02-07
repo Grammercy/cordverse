@@ -103,6 +103,17 @@ function App() {
     }
   };
 
+  const fetchDMs = async () => {
+    try {
+      const res = await api.get(`${API_BASE}/dms`, {
+        headers: { 'X-Discord-Token': token }
+      });
+      setChannels(res.data);
+    } catch (err) {
+      console.error('Failed to fetch DMs', err);
+    }
+  };
+
   const fetchChannels = async (guildId: string) => {
     try {
       const res = await api.get(`${API_BASE}/channels/${guildId}`, {
@@ -146,7 +157,10 @@ function App() {
     setSelectedGuildId(guildId);
     setSelectedChannelId(null);
     setMessages([]);
-    if (guildId) {
+    
+    if (guildId === '@me') {
+        fetchDMs();
+    } else if (guildId) {
       fetchChannels(guildId);
     } else {
       setChannels([]);
@@ -199,7 +213,7 @@ function App() {
           channels={channels} 
           selectedChannelId={selectedChannelId} 
           onSelectChannel={handleSelectChannel}
-          guildName={selectedGuild?.name || 'Guild'}
+          guildName={selectedGuildId === '@me' ? 'Direct Messages' : (selectedGuild?.name || 'Guild')}
         />
       )}
 

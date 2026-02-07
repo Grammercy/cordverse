@@ -87,6 +87,45 @@ class DiscordService {
     }));
   }
 
+  async getDMs(token) {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+
+    // Filter for DMs (type 1) and Group DMs (type 3)
+    const channels = client.channels.cache.filter(c => c.type === 'DM' || c.type === 'GROUP_DM');
+
+    // Sort by last message timestamp (descending) if available, roughly approximating recent activity
+    // Note: client.channels.cache order isn't guaranteed. fetching them sorted from API is better but cache is faster.
+    // We can map then sort.
+
+    return channels.map(channel => {
+      let name = channel.name;
+      let avatar = null;
+
+      if (channel.type === 'DM') {
+        name = channel.recipient?.username || 'Unknown User';
+        avatar = channel.recipient?.avatar;
+      } else if (channel.type === 'GROUP_DM') {
+        if (!name) {
+          name = channel.recipients.map(u => u.username).join(', ');
+        }
+        avatar = channel.icon;
+      }
+
+      return {
+        id: channel.id,
+        name: name,
+        type: channel.type === 'DM' ? 'dm' : 'group',
+        avatar: avatar,
+        recipientId: channel.recipient?.id,
+        lastMessageId: channel.lastMessageId
+      };
+    }).sort((a, b) => {
+      // Simple sort, robust sorting would require fetching message timestamps
+      return 0; 
+    });
+  }
+
   async getChannels(token, guildId) {
     const client = this.clients.get(token);
     if (!client) throw new Error('Client not logged in');

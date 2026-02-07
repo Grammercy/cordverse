@@ -36,6 +36,16 @@ module.exports = (discordService) => {
     }
   });
 
+  router.get('/dms', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const dms = await discordService.getDMs(token);
+      res.json(dms);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   router.get('/channels/:guildId', async (req, res) => {
     try {
       const token = req.headers['x-discord-token'];

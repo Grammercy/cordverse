@@ -15,7 +15,10 @@ export interface Channel {
   id: string;
   name: string;
   parentId: string | null;
-  position: number;
+  position?: number;
+  type?: 'dm' | 'group' | 'text';
+  avatar?: string | null;
+  recipientId?: string;
 }
 
 export interface Message {

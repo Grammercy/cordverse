@@ -15,8 +15,8 @@ const Sidebar: React.FC<SidebarProps> = ({ guilds, selectedGuildId, onSelectGuil
     <div className="w-20 bg-gray-900 flex flex-col items-center py-4 space-y-4 h-full">
       <div className="flex-1 w-full flex flex-col items-center space-y-4 overflow-y-auto no-scrollbar">
         <div 
-          className={`w-12 h-12 bg-gray-700 rounded-3xl hover:rounded-2xl transition-all duration-200 flex items-center justify-center cursor-pointer group flex-shrink-0 ${!selectedGuildId ? 'rounded-2xl bg-indigo-500' : ''}`}
-          onClick={() => onSelectGuild('')}
+          className={`w-12 h-12 bg-gray-700 rounded-3xl hover:rounded-2xl transition-all duration-200 flex items-center justify-center cursor-pointer group flex-shrink-0 ${selectedGuildId === '@me' ? 'rounded-2xl bg-indigo-500' : ''}`}
+          onClick={() => onSelectGuild('@me')}
         >
           <span className="text-white font-bold">DM</span>
         </div>
