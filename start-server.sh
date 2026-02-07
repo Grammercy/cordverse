@@ -8,6 +8,7 @@ echo "Starting Cordverse Server on port $PORT..."
 # Ensure frontend is built
 echo "Building frontend..."
 cd frontend
+rm -rf dist
 npm install
 npm run build
 cd ..

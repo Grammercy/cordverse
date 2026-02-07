@@ -33,7 +33,9 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from the React frontend app
-app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+console.log('Serving frontend from:', frontendPath);
+app.use(express.static(frontendPath));
 
 const discordService = new DiscordService(io);
 const qrLoginService = new QrLoginService(io);
