@@ -2,6 +2,7 @@
 
 A self-hosted, lightweight Discord client MVP designed for privacy and multiple account management. It acts as a proxy between your browser and Discord, keeping your tokens secure on your own server.
 
+
 ## Features
 
 ### Core Functionality
