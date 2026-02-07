@@ -122,7 +122,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             className={`flex-1 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2
               ${activeTab === 'qr' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
           >
-            <Smartphone size={18} /> QR Code
+            <Smartphone size={18} /> QR Code (v2)
           </button>
           <button 
             onClick={() => setActiveTab('token')}
