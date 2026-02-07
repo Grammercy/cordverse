@@ -41,6 +41,9 @@ jobs:
                 npm install -g pm2
             fi
             
-            # Start or Reload
-            pm2 reload ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
+            # Start or Restart the application
+            # "startOrRestart" is robust: it starts if missing, or restarts if present.
+            pm2 startOrRestart ecosystem.config.js --env production
+            
+            # Save the process list so it respawns on reboot (requires 'pm2 startup' to be run once manually on server)
             pm2 save
