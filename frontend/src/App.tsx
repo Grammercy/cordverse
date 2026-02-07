@@ -178,3 +178,45 @@ function App() {
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
+
+  const selectedGuild = guilds.find(g => g.id === selectedGuildId);
+  const selectedChannel = channels.find(c => c.id === selectedChannelId);
+
+  return (
+    <div className="flex h-screen bg-gray-900 text-gray-100 overflow-hidden">
+      <Sidebar 
+        guilds={guilds} 
+        selectedGuildId={selectedGuildId} 
+        onSelectGuild={handleSelectGuild}
+        account={account}
+        onLogout={handleLogout}
+      />
+      
+      {selectedGuildId && (
+        <ChannelList 
+          channels={channels} 
+          selectedChannelId={selectedChannelId} 
+          onSelectChannel={handleSelectChannel}
+          guildName={selectedGuild?.name || 'Guild'}
+        />
+      )}
+
+      {selectedChannelId ? (
+        <ChatArea 
+          messages={messages} 
+          channelName={selectedChannel?.name || 'channel'} 
+          onSendMessage={handleSendMessage}
+        />
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center bg-gray-700">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">Welcome to Cordverse</h2>
+            <p className="text-gray-400">Select a channel to start chatting</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
