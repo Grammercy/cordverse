@@ -82,5 +82,20 @@ module.exports = (discordService) => {
     }
   });
 
+  router.get('/members/:guildId', async (req, res) => {
+    try {
+      const token = req.headers['x-discord-token'];
+      const { guildId } = req.params;
+      const { query } = req.query;
+      
+      if (!query) return res.json([]);
+
+      const members = await discordService.searchMembers(token, guildId, query);
+      res.json(members);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 };

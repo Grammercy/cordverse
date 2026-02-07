@@ -223,6 +223,7 @@ function App() {
           messages={messages} 
           channelName={selectedChannel?.name || 'channel'} 
           onSendMessage={handleSendMessage}
+          guildId={selectedGuildId}
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center bg-gray-700">

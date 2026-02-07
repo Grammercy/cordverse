@@ -176,6 +176,32 @@ class DiscordService {
 
     return await channel.send(content);
   }
+
+  async searchMembers(token, guildId, query) {
+    const client = this.clients.get(token);
+    if (!client) throw new Error('Client not logged in');
+    
+    if (guildId === '@me') {
+       return [];
+    }
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) throw new Error('Guild not found');
+
+    try {
+      const members = await guild.members.search({ query, limit: 10 });
+      return members.map(m => ({
+        id: m.id,
+        username: m.user.username,
+        displayName: m.displayName,
+        avatar: m.user.avatar,
+        discriminator: m.user.discriminator
+      }));
+    } catch (e) {
+      console.error('Member search failed', e);
+      return [];
+    }
+  }
 }
 
 module.exports = DiscordService;
