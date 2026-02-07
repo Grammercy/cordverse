@@ -1,8 +1,16 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
-const dbPath = process.env.DATABASE_PATH || './data/cordverse.db';
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../data/cordverse.db');
+
+// Ensure data directory exists
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
 // Create tables
