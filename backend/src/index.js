@@ -11,7 +11,8 @@ const QrLoginService = require('./services/qrLoginService');
 const discordRoutes = require('./routes/discord');
 const { requireAuth, JWT_SECRET } = require('./middleware/auth');
 
-dotenv.config();
+// Load .env from specific path (backend root)
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const server = http.createServer(app);

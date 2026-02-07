@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../data/cordverse.db');
 
