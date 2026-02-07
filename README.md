@@ -5,6 +5,7 @@ A self-hosted, lightweight Discord client MVP designed for privacy and multiple 
 
 ## Features
 
+
 ### Core Functionality
 - **Self-Hosted Proxy**: Your backend acts as the intermediary, handling Discord WebSocket connections and API requests.
 - **Multi-Account Switching**: Seamlessly toggle between multiple Discord accounts without re-entering credentials.
