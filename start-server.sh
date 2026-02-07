@@ -22,9 +22,9 @@ cd ..
 echo "Starting backend with PM2..."
 cd backend
 npm install
+cd .. # Return to project root to run pm2 commands
 PORT=$PORT npx pm2 startOrRestart ecosystem.config.js --env production --update-env
 npx pm2 save
-cd ..
 
 echo "Server started in background. Use 'npx pm2 logs cordverse' to view logs."
 npx pm2 list
