@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import api, { setMasterToken, clearMasterToken } from './api';
+import api, { clearMasterToken } from './api';
 import Sidebar from './components/Sidebar';
 import ChannelList from './components/ChannelList';
 import ChatArea from './components/ChatArea';
