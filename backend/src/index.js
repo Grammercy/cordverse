@@ -7,6 +7,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
 const DiscordService = require('./services/discordService');
+const QrLoginService = require('./services/qrLoginService');
 const discordRoutes = require('./routes/discord');
 const { requireAuth, JWT_SECRET } = require('./middleware/auth');
 
@@ -34,6 +35,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
 
 const discordService = new DiscordService(io);
+const qrLoginService = new QrLoginService(io);
 
 // Auth Route
 app.post('/api/auth/login', (req, res) => {
@@ -74,10 +76,19 @@ app.get(/(.*)/, (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  // console.log('a user connected');
+  
+  socket.on('start_qr', () => {
+    qrLoginService.startSession(socket);
+  });
+
+  socket.on('stop_qr', () => {
+    qrLoginService.stopSession(socket);
+  });
   
   socket.on('disconnect', () => {
-    console.log('user disconnected');
+    qrLoginService.stopSession(socket);
+    // console.log('user disconnected');
   });
 });
 
